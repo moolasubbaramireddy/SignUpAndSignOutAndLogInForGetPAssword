@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.Set;
 
-@Data
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
@@ -31,6 +31,10 @@ public class User {
 
     private String firstName; // Optional field
     private String lastName;  // Optional field
+    private String mobileNumber;
+    private String otp;
+
+    private  String captcha;
 
     private boolean rememberMe;
 
@@ -107,6 +111,30 @@ public class User {
 
     public void setRememberMe(boolean rememberMe) {
         this.rememberMe = rememberMe;
+    }
+
+    public String getMobileNumber() {
+        return mobileNumber;
+    }
+
+    public void setMobileNumber(String mobileNumber) {
+        this.mobileNumber = mobileNumber;
+    }
+
+    public String getOtp() {
+        return otp;
+    }
+
+    public void setOtp(String otp) {
+        this.otp = otp;
+    }
+
+    public String getCaptcha() {
+        return captcha;
+    }
+
+    public void setCaptcha(String captcha) {
+        this.captcha = captcha;
     }
 
     public int getFailedLoginAttempts() {
@@ -188,6 +216,8 @@ public class User {
     public void setRoles(Set<Role> roles) {
         this.roles = roles;
     }
+
+
 }
 
 

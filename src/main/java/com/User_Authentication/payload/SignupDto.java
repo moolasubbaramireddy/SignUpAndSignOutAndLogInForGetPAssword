@@ -30,6 +30,15 @@ public class SignupDto {
 
     private String lastName;
 
+    @NotBlank(message = "MobileNumber is required")
+    private String mobileNumber;
+
+    @NotBlank(message = "Otp is required")
+    private String otp;
+
+
+    private  String captcha;
+
     public String getUsername() {
         return username;
     }
@@ -76,6 +85,30 @@ public class SignupDto {
 
     public void setLastName(String lastName) {
         this.lastName = lastName;
+    }
+
+    public String getCaptcha() {
+        return captcha;
+    }
+
+    public void setCaptcha(String captcha) {
+        this.captcha = captcha;
+    }
+
+    public String getMobileNumber() {
+        return mobileNumber;
+    }
+
+    public void setMobileNumber(String mobileNumber) {
+        this.mobileNumber = mobileNumber;
+    }
+
+    public String getOtp() {
+        return otp;
+    }
+
+    public void setOtp(String otp) {
+        this.otp = otp;
     }
 }
 

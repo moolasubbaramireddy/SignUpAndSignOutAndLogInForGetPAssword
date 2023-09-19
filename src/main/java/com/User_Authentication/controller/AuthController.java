@@ -2,6 +2,7 @@ package com.User_Authentication.controller;
 
 
 
+import com.User_Authentication.captcha.CaptchaService;
 import com.User_Authentication.entity.Role;
 import com.User_Authentication.entity.User;
 import com.User_Authentication.payload.JWTAuthResponse;
@@ -12,6 +13,7 @@ import com.User_Authentication.repository.RoleRepository;
 import com.User_Authentication.repository.UserRepository;
 
 import com.User_Authentication.security.JwtTokenProvider;
+import com.User_Authentication.service.OtpService;
 import com.User_Authentication.util.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,10 +42,15 @@ public class AuthController {
 
     private final UserRepository userRepository;
 
+    @Autowired
+    private  OtpService otpService;
+
     private RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService; // Inject the EmailService
 
+
+    private CaptchaService captchaService;
 
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -52,13 +59,15 @@ public class AuthController {
     private long jwtExpirationInMs;
 
     @Autowired
-    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder,RoleRepository roleRepository, EmailService emailService,JwtTokenProvider jwtTokenProvider,AuthenticationManager authenticationManager) {
+    public AuthController(UserRepository userRepository,PasswordEncoder passwordEncoder,RoleRepository roleRepository, EmailService emailService,JwtTokenProvider jwtTokenProvider,AuthenticationManager authenticationManager,CaptchaService captchaService) {
         this.userRepository = userRepository;
+
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
         this.jwtTokenProvider=jwtTokenProvider;
         this.authenticationManager=authenticationManager;
         this.roleRepository=roleRepository;
+        this.captchaService=captchaService;
     }
 
     //http://localhost:8080/api/auth/login
@@ -66,20 +75,31 @@ public class AuthController {
     public ResponseEntity<?> login(@Valid @RequestBody LoginDto loginDto,
                                    @RequestParam(value = "rememberMe", required = false) boolean rememberMe) {
         try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(loginDto.getUsernameOrEmail(), loginDto.getPassword())
-            );
+            // Check if the OTP is valid for the given mobile number
+            if (otpService.verifyOtp(loginDto.getMobileNumber(), loginDto.getOtp())) {
+                Authentication authentication = authenticationManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(loginDto.getUsernameOrEmail(), loginDto.getPassword())
+                );
 
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            String token = jwtTokenProvider.createToken(loginDto.getUsernameOrEmail());
+                String token = jwtTokenProvider.createToken(loginDto.getUsernameOrEmail());
 
-            // Clear login attempts upon successful login (if you have login attempt tracking)
-            // loginAttemptService.resetAttempts(loginDTO.getUsernameOrEmail());
+                Optional<User> byCaptcha = userRepository.findByCaptcha(loginDto.getCaptcha());
+                try {
+                    String captcha = byCaptcha.get().getCaptcha();
+                } catch (Exception e) {
+                    return new ResponseEntity<>("Email Vaild captcha", HttpStatus.OK);
+                }
 
+                // Clear login attempts upon successful login (if you have login attempt tracking)
+                // loginAttemptService.resetAttempts(loginDTO.getUsernameOrEmail());
 
-            return ResponseEntity.ok(new JWTAuthResponse(token));
-
+                return ResponseEntity.ok(new JWTAuthResponse(token));
+            } else {
+                // OTP is invalid
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid OTP.");
+            }
         } catch (BadCredentialsException e) {
             // Handle authentication failure here
             User user = userRepository.findByUsernameOrEmail(loginDto.getUsernameOrEmail(), loginDto.getUsernameOrEmail()).get();
@@ -110,6 +130,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid username/email or password.");
         }
     }
+
 
 
     //http://localhost:8080/api/auth/signup
@@ -216,7 +237,7 @@ public class AuthController {
         userRepository.save(user);
 
         // Send the password reset email with a link that includes the resetToken
-        String resetLink = "https://yourapp.com/reset-password?token=" + resetToken;
+        String resetLink = "https://localhost:8080/reset-password?token=" + resetToken;
         emailService.sendPasswordResetEmail(email, resetLink);
 
         return ResponseEntity.status(HttpStatus.OK).body("Password reset link sent to your email.");
@@ -251,5 +272,46 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.OK).body("Password reset successful.");
     }
 
+
+  //  http://localhost:8080/api/auth/captcha
+    @PostMapping("/captcha")
+    public ResponseEntity<?> createCaptcha(@RequestParam("email") String email) throws Exception{
+        Optional<User> byEmail = userRepository.findByEmail(email);
+        if (!byEmail.isPresent()){
+            return new ResponseEntity<>("User not found for this Email:"+email,HttpStatus.NOT_FOUND);
+        }
+
+        String captcha = captchaService.captchaGenerator(email);
+        return new ResponseEntity<>(captcha,HttpStatus.OK);
+
+    }
+
+    /*
+    @PostMapping("/send-otp")
+    public ResponseEntity<String> sendOtp(@RequestParam String phoneNumber) {
+        // Generate a 6-digit OTP
+        String otp = otpService.generateOtp(6);
+
+        // Send OTP via Twilio SMS
+        boolean sent = twilioService.sendOtp(phoneNumber, otp);
+
+        if (sent) {
+            // Store the OTP with the phone number for verification
+            otpMap.put(phoneNumber, otp);
+            return ResponseEntity.ok("OTP sent successfully.");
+        } else {
+            return ResponseEntity.badRequest().body("Failed to send OTP.");
+        }
+    }
+
+     */
+//http://localhost:8080/api/auth/generate-otp
+
+    @PostMapping("/generate-otp")
+    public String generateOtp(@RequestBody LoginDto loginDto) {
+        // Generate and send OTP via Twilio
+        otpService.generateAndSendOtp(loginDto.getMobileNumber());
+        return "OTP sent to " + loginDto.getMobileNumber();
+    }
 
 }
